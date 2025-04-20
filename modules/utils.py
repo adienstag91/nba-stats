@@ -37,13 +37,6 @@ def extract_player_details(selected_player, selected_team=None):
     elif isinstance(selected_player, str) and selected_team: 
         return (selected_player, selected_team)  # From team roster
     return None, None  # No valid selection
-
-def rename_columns(df):
-    """
-    Renames the columns of the DataFrame using the STAT_NAME_MAPPING dictionary.
-    """
-    return df.rename(columns=STAT_NAME_MAPPING)
-
   
 def fuzzy_match_player(player_name, all_players):
     """
@@ -68,6 +61,36 @@ def fuzzy_match_player(player_name, all_players):
         return player_dict[best_match[0]]  # Correctly returns (player_name, team_name)
 
     return None, None
+def rename_columns(df):
+    """
+    Renames the columns of the DataFrame using the STAT_NAME_MAPPING dictionary.
+    """
+    return df.rename(columns=STAT_NAME_MAPPING)
+    
+def filter_stats(stats_data, selected_stats, is_average=False):
+    """
+    Filters the given stats dictionary/list based on selected stats.
 
+    - stats_data: Dictionary (season averages) or list of dictionaries (last 5 games).
+    - selected_stats: List of stat keys to keep.
+    - is_average: If True, modifies keys to match the "avg_" prefix.
 
+    Returns:
+      - Filtered list of dictionaries (if stats_data is a list)
+      - Filtered dictionary (if stats_data is a dictionary)
+    """
+    if isinstance(stats_data, list):  # Handling list (e.g., Last 5 Games)
+        filtered_data = []
+        for game in stats_data:
+            filtered_game = {stat: game.get(stat, "N/A") for stat in selected_stats}
+            filtered_game["game_date"] = game["game_date"]  # Keep game date
+            filtered_data.append(filtered_game)
+        return filtered_data
+
+    elif isinstance(stats_data, dict):  # Handling dict (e.g., Season Averages, Last 5 Game Averages)
+        if is_average:
+            return {f"avg_{stat}": stats_data.get(f"avg_{stat}", "N/A") for stat in selected_stats}
+        return {stat: stats_data.get(stat, "N/A") for stat in selected_stats}
+
+    return stats_data  # If unexpected type, return as is
 

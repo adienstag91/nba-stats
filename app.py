@@ -1,6 +1,7 @@
 import streamlit as st
 from datetime import datetime, date
 import pandas as pd
+from modules.player import Player
 from modules.constants import *
 from modules.utils import *
 from modules.fetch import *
@@ -23,11 +24,15 @@ if search_method == "Game Date":
 
     # Get games for the selected date
     games = get_games_for_date(selected_date)
+    print(f"games - {games}")
 
     if games:
         game_options = [f"{g['away_team']} @ {g['home_team']} at {g['game_time']}" for g in games]
+        print(f"game options - {game_options}")
         selected_game_index = st.selectbox("Select a game:", range(len(game_options)), format_func=lambda x: game_options[x])
+        print(f"selected_game_index - {selected_game_index}")
         selected_game = games[selected_game_index]
+        print(f"selected_game - {selected_game}")
 
         away_team_logo = get_team_logo(selected_game['away_team'])
         home_team_logo = get_team_logo(selected_game['home_team'])
@@ -99,19 +104,26 @@ if selected_player_name and search_method in ["Team Roster","Player Name"]:
             st.warning(f"{selected_player_name} ({selected_player_team}) does not have a game on {selected_date}.")
 # 5️⃣ **Proceed to Stats Selection**
 if selected_player:
-    player_profile_url, player_stats_url, player_img_url = get_player_url(selected_player_name, selected_player_team, selected_date.year)
-    stats = get_player_stats(selected_player_name, selected_player_team, selected_date.year)
+    player = Player(selected_player_name, selected_player_team, selected_date.year)
+
+    if not player.profile_url:
+        st.error("❌ Player not found.")
+        st.stop()
+
+    if not player.fetch_stats():
+        st.error("❌ Failed to fetch player stats.")
+        st.stop()
 
     # Check if we have stats data
-    if stats is None:
+    if player.stats is None:
         st.error("❌ No stats found for this player.")
         st.stop()
 
-    st.write(f"Fetching stats for {selected_player_name} from {player_stats_url}")
+    st.write(f"Fetching stats for {selected_player_name} from {player.stats_url}")
 
     #st.write(f"📊 Player stats: {stats}")  # Debugging
 
-    if stats:
+    if player.stats:
         # 4️⃣ **Stat Selection**
         DEFAULT_COLUMNS = ["game_date", "opponent", "result"]
 
@@ -147,14 +159,14 @@ if selected_player:
         if st.button("Generate Report"):
             st.subheader(f"📊 Stats Report for {selected_player_name}")
 
-            if player_img_url:
-                st.image(player_img_url, caption=selected_player_name, width=150)
+            if player.image_url:
+                st.image(player.image_url, caption=selected_player_name, width=150)
             else:
                 st.write("No image available for this player.")
 
             # **Last 5 Games**
             if "Last n Games" in selected_stat_types:
-                last_n_games, avg_stats = get_last_n_games_stats(selected_player_name, selected_date, stats,n)
+                last_n_games, avg_over_last_n_games = player.get_last_n_games(n, selected_date)
                 if last_n_games:
                     filtered_last_n_games = filter_stats(last_n_games, selected_stats)
 
@@ -199,7 +211,7 @@ if selected_player:
                     st.write("No matching stats found for Last 5 Games.")
 
                 # **Averages over last 5 games**
-                filtered_avg_stats = filter_stats(avg_stats, selected_stats, is_average=True)
+                filtered_avg_stats = filter_stats(avg_over_last_n_games, selected_stats, is_average=True)
                 df_avg_stats = pd.DataFrame([filtered_avg_stats])
                 # Format numeric values to 1 decimal place
                 df_avg_stats = df_avg_stats.astype(str).apply(lambda col: col.str.format("{:.1f}") if col.dtype == "float64" else col)
@@ -215,7 +227,7 @@ if selected_player:
 
             # **Full Season Averages**
             if "Full Season Averages" in selected_stat_types:
-                season_avg_stats = get_full_season_averages(selected_player_name, selected_date, stats)
+                season_avg_stats = player.get_season_averages()
                 if season_avg_stats:
                     filtered_season_avg_stats = filter_stats(season_avg_stats, selected_stats, is_average=True)
 
@@ -237,7 +249,15 @@ if selected_player:
             # **Stats Against This Opponent**
             if "Stats Against This Opponent" in selected_stat_types:
                 if selected_game:
-                    opponent_stats, avg_opponent_stats, opponent_team_name = get_stats_against_opponent(selected_player_name, selected_player_team, selected_date, stats, selected_game)
+                    if selected_player_team == selected_game['home_team']:
+                        opponent_team_name = selected_game['away_team']
+                    elif player_team == selected_game['away_team']:
+                        selected_opponent_team_name = selected_game['home_team']
+                    else:
+                        print(f"Player {player_name} not found in either team's roster.")
+                    
+                    opponent_team_code = TEAM_CODES[opponent_team_name]
+                    opponent_stats, avg_opponent_stats = player.get_stats_against_opponent(opponent_team_code)
                     if opponent_stats:
                         filtered_opponent_stats = filter_stats(opponent_stats, selected_stats)
 
@@ -277,24 +297,24 @@ if selected_player:
                 else:
                     st.warning(f"{selected_player_name} ({selected_player_team}) does not have a game on {selected_date}.")
 
-                # **Threshold Stats**
-                if "Threshold Stats" in selected_stat_types:
-                    threshold_results = []
-                    for stat_type, threshold in stat_thresholds.items():
-                        result = count_exceeding_threshold(selected_player_name, stat_type, threshold, stats)
-                        count_exceeded, count_not_exceeded, total_games, percentage_exceeded, percentage_not_exceeded = result
+            # **Threshold Stats**
+            if "Threshold Stats" in selected_stat_types:
+                threshold_results = []
+                for stat, threshold in stat_thresholds.items():
+                    result = player.count_exceeding_threshold(stat, threshold)
+                    count_exceeded, count_not_exceeded, total_games, percentage_exceeded, percentage_not_exceeded = result
 
-                        threshold_results.append([
-                            STAT_NAME_MAPPING[stat_type], total_games, count_exceeded, f"{percentage_exceeded:.2f}%", 
-                            count_not_exceeded, f"{percentage_not_exceeded:.2f}%"
-                        ])
+                    threshold_results.append([
+                        STAT_NAME_MAPPING[stat], total_games, count_exceeded, f"{percentage_exceeded:.2f}%", 
+                        count_not_exceeded, f"{percentage_not_exceeded:.2f}%"
+                    ])
                     
-                    if threshold_results:
-                        st.write("### 📈 Threshold Stats Analysis")
-                        df_thresholds = pd.DataFrame(threshold_results, columns=["Stat", "Total Games", "Exceeded", "% Exceeded", "Not Exceeded", "% Not Exceeded"])
+                if threshold_results:
+                    st.write("### 📈 Threshold Stats Analysis")
+                    df_thresholds = pd.DataFrame(threshold_results, columns=["Stat", "Total Games", "Exceeded", "% Exceeded", "Not Exceeded", "% Not Exceeded"])
 
-                        # ✅ Adjust index to start from 1
-                        df_thresholds.index = df_thresholds.index + 1
-                        st.table(df_thresholds)
-                    else:
-                        st.write("No threshold stats available.")
+                    # ✅ Adjust index to start from 1
+                    df_thresholds.index = df_thresholds.index + 1
+                    st.table(df_thresholds)
+                else:
+                    st.write("No threshold stats available.")
