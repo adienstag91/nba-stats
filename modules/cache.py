@@ -21,7 +21,7 @@ def load_cache():
             return json.load(f)
     except json.JSONDecodeError:
         print("⚠️ Cache file is corrupted. Resetting cache.")
-        return {"rosters": {}, "all_players": {}, "player_stats": {}, "pages": {}, "player_photos": {}}
+        return {"rosters": {}, "all_players": {}, "player_stats": {}, "pages": {}}
 
 def save_cache(cache):
     """Save the cache to file."""

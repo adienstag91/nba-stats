@@ -2,10 +2,10 @@ import streamlit as st
 from datetime import datetime, date
 import pandas as pd
 from modules.player import Player
+from modules.team import Team
 from modules.constants import *
 from modules.utils import *
 from modules.fetch import *
-from modules.processing import *
 import altair as alt
 
 # 1️⃣ **Choose Search Method**
@@ -27,24 +27,21 @@ if search_method == "Game Date":
     print(f"games - {games}")
 
     if games:
-        game_options = [f"{g['away_team']} @ {g['home_team']} at {g['game_time']}" for g in games]
+        game_options = [str(g) for g in games]
         print(f"game options - {game_options}")
         selected_game_index = st.selectbox("Select a game:", range(len(game_options)), format_func=lambda x: game_options[x])
         print(f"selected_game_index - {selected_game_index}")
         selected_game = games[selected_game_index]
         print(f"selected_game - {selected_game}")
 
-        away_team_logo = get_team_logo(selected_game['away_team'])
-        home_team_logo = get_team_logo(selected_game['home_team'])
-
         # Create two columns for side-by-side layout
         col1, col2 = st.columns([1, 1])
         with col1:
-            if away_team_logo:
-                st.image(away_team_logo, width=150, caption=selected_game['away_team'])
+            if selected_game.away_team.logo_url:
+                st.image(selected_game.away_team.logo_url, width=150, caption=selected_game.away_team.name)
         with col2:
-            if home_team_logo:
-                st.image(home_team_logo, width=150, caption=selected_game['home_team'])
+            if selected_game.home_team.logo_url:
+                st.image(selected_game.home_team.logo_url, width=150, caption=selected_game.home_team.name)
 
 
         # Get players from selected game
@@ -57,16 +54,14 @@ if search_method == "Game Date":
 # 3️⃣ **Team Roster Search**
 elif search_method == "Team Roster":
     selected_team = st.selectbox("Select a team:", get_all_teams())
-    team_logo = get_team_logo(selected_team)
-    if team_logo:
-        st.image(team_logo, caption=selected_team, width=150)
+    selected_team = Team(selected_team)
+    if selected_team.logo_url:
+        st.image(selected_team.logo_url, caption=selected_team.name, width=150)
     else:
         st.write("No image available for this team.")
-    team_roster = get_team_roster(selected_team)
-    #st.write("DEBUG - team_roster:", team_roster)
 
     if selected_team:
-        selected_player = st.selectbox("Select a Player", team_roster, format_func=lambda x: x[0])
+        selected_player = st.selectbox("Select a Player", selected_team.roster, format_func=lambda x: x[0])
 
 # 4️⃣ **Player Name Search**
 elif search_method == "Player Name":
@@ -251,8 +246,8 @@ if selected_player:
                 if selected_game:
                     if selected_player_team == selected_game['home_team']:
                         opponent_team_name = selected_game['away_team']
-                    elif player_team == selected_game['away_team']:
-                        selected_opponent_team_name = selected_game['home_team']
+                    elif selected_player_team == selected_game['away_team']:
+                        opponent_team_name = selected_game['home_team']
                     else:
                         print(f"Player {player_name} not found in either team's roster.")
                     
