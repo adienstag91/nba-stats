@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup, Comment
 from modules.constants import *
 from modules.utils import *
 from modules.cache import *
+from modules.player import *
 from modules.team import Team
 from modules.game import Game
 
@@ -57,12 +58,12 @@ def get_all_players_in_game(selected_game):
 
     return home_team.roster + away_team.roster
 
-def get_all_active_players():
+def get_all_active_players(year):
     """Fetch and cache all active NBA players."""
     cache = load_cache()
     if "all_players" in cache and (time.time() - cache["all_players"].get("timestamp", 0)) < CACHE_EXPIRY["all_players"]:
         print("✅ Using cached all_players list")
-        return cache["all_players"]["data"]
+        return [Player(name, team, year) for name, team in cache["all_players"]["data"]]
 
     print("🌍 Fetching all active players...")
     all_players = []
@@ -71,6 +72,9 @@ def get_all_active_players():
         all_players.extend(team.roster)
         time.sleep(7)
     
-    cache["all_players"] = {"data": all_players, "timestamp": time.time()}
+    cache["all_players"] = {
+    "data": [(p.name, p.team_name) for p in all_players],  # ✅ Simple & safe
+    "timestamp": time.time()
+}
     save_cache(cache)
-    return all_players
+    return [Player(name, team, year) for name, team in cache["all_players"]["data"]]

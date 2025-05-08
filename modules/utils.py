@@ -49,16 +49,17 @@ def fuzzy_match_player(player_name, all_players):
     Returns:
         tuple: (Best matched player name, team name), or (None, None) if no match.
     """
-    print(type(all_players))  # Check if it's a list
-    print(type(all_players[0]))  # Check if first element is a tuple or list
-    print(all_players[:5])  # Print first 5 elements to inspect structure
+    #print(type(all_players))  # Check if it's a list
+    #print(type(all_players[0]))  # Check if first element is a tuple or list
+    #print(all_players[:5])  # Print first 5 elements to inspect structure
 
-    player_dict = {p[0]: p for p in all_players}  # Map player_name -> (player_name, team_name)
+    #player_dict = {p[0]: p for p in all_players}  # Map player_name -> (player_name, team_name)
 
-    best_match = process.extractOne(player_name, player_dict.keys())
+    best_match = process.extractOne(player_name, all_players)
+    print(f"best match is {best_match}")
 
     if best_match:
-        return player_dict[best_match[0]]  # Correctly returns (player_name, team_name)
+        return best_match[0]  # Correctly returns (player_name, team_name)
 
     return None, None
 def rename_columns(df):

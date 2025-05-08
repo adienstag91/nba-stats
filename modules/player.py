@@ -2,22 +2,25 @@ from bs4 import BeautifulSoup
 from datetime import datetime, date
 from modules.cache import safe_request
 from modules.utils import normalize_player_name, format_display_name
-from modules.constants import AVAILABLE_STATS
+from modules.constants import *
 
 class Player:
     def __init__(self, name, team, year):
         self.name = name
-        self.team = team
+        self.team_name = team
+        self.team_code = TEAM_CODES.get(self.team_name)
         self.year = year
         self.normalized_name = normalize_player_name(name)
         self.profile_url = None
         self.stats_url = None
         self.image_url = None
         self.stats = None
-
-        self._resolve_urls()
+        self._urls_resolved = False  # ✅ Flag to track if URLs were resolved
 
     def _resolve_urls(self):
+        if self._urls_resolved:
+            return True
+
         BASE_URL = "https://www.basketball-reference.com/players/{}/{}"
         name_parts = self.normalized_name.split()
         last_name = name_parts[-1].lower()
@@ -37,7 +40,6 @@ class Player:
 
             soup = BeautifulSoup(response, "html.parser")
 
-            # Confirm player match via header
             h1_tag = soup.find("h1")
             if not h1_tag or not h1_tag.find("span"):
                 continue
@@ -46,7 +48,6 @@ class Player:
             if normalize_player_name(format_display_name(fetched_name)) != self.normalized_name:
                 continue
 
-            # Confirm correct team
             team_element = None
             for strong_tag in soup.select("#meta strong"):
                 if "Team" in strong_tag.text:
@@ -54,31 +55,44 @@ class Player:
                     break
             fetched_team = team_element.text.strip() if team_element else None
 
-            if fetched_team != self.team:
+            if fetched_team != self.team_name:
                 continue
 
-            # If matched, store URLs and break
             self.profile_url = profile_url
             self.stats_url = stats_url
 
-            # Extract image
             media_item = soup.find("div", class_="media-item")
             img_tag = media_item.find("img") if media_item else None
             self.image_url = img_tag["src"] if img_tag else None
-            break
+            self._urls_resolved = True  # ✅ Mark as resolved
+            return True
+
+        return False
+
+    def __str__(self):
+        return f"{self.name}"
+
+    def __repr__(self):
+        return self.__str__()
 
     def fetch_stats(self):
+        if self.stats:
+            return self.stats
+
+        if not self._urls_resolved and not self._resolve_urls():
+            print(f"⚠️ Could not resolve URLs for {self.name}")
+            return None
+
         if not self.stats_url:
             print(f"⚠️ No stats URL found for {self.name}")
             return None
 
-        response = safe_request(self.stats_url, "player_stats")
+        response = safe_request(self.stats_url)
         if not response:
             print(f"❌ Failed to fetch stats page: {self.stats_url}")
             return None
 
         soup = BeautifulSoup(response, "html.parser")
-
         stats = []
         for table_id, game_type in [("player_game_log_reg", "regular"), ("player_game_log_post", "playoff")]:
             table = soup.find("table", {"id": table_id})

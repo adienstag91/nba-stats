@@ -28,11 +28,8 @@ if search_method == "Game Date":
 
     if games:
         game_options = [str(g) for g in games]
-        print(f"game options - {game_options}")
         selected_game_index = st.selectbox("Select a game:", range(len(game_options)), format_func=lambda x: game_options[x])
-        print(f"selected_game_index - {selected_game_index}")
         selected_game = games[selected_game_index]
-        print(f"selected_game - {selected_game}")
 
         # Create two columns for side-by-side layout
         col1, col2 = st.columns([1, 1])
@@ -43,10 +40,9 @@ if search_method == "Game Date":
             if selected_game.home_team.logo_url:
                 st.image(selected_game.home_team.logo_url, width=150, caption=selected_game.home_team.name)
 
-
         # Get players from selected game
         all_players = get_all_players_in_game(selected_game)
-        selected_player = st.selectbox("Select a player:", all_players, format_func=lambda x: f"{x[0]} ({x[1]})")
+        selected_player = st.selectbox("Select a player:", all_players, format_func=lambda x: f"{x.name} ({x.team_name})")
 
     else:
         st.write(f"⚠️ No Games found on {selected_date}")
@@ -61,64 +57,64 @@ elif search_method == "Team Roster":
         st.write("No image available for this team.")
 
     if selected_team:
-        selected_player = st.selectbox("Select a Player", selected_team.roster, format_func=lambda x: x[0])
+        selected_player = st.selectbox("Select a Player", selected_team.roster, format_func=lambda x: f"{x.name}")
 
 # 4️⃣ **Player Name Search**
 elif search_method == "Player Name":
-    all_players = get_all_active_players()  # Returns a list of (team_code, player_name, team_name)
+    all_players = get_all_active_players(year=2025)  # Returns a list of (team_code, player_name, team_name)
+    print(all_players)
     
     search_query = st.text_input("Enter player name:")
 
     if search_query:
-        selected_player = fuzzy_match_player(search_query, all_players)
+        fuzzy_player = fuzzy_match_player(search_query, all_players)
+        print(f"fuzzy player - {fuzzy_player}")
+        selected_player = Player(fuzzy_player.name, fuzzy_player.team_name, year=2025)
 
         if selected_player:
-            st.write(f"### Selected Player: {selected_player[0]} ({selected_player[1]})")
+            st.write(f"### Selected Player: {selected_player.name} ({selected_player.team_name})")
         else:
             st.warning("No matching player found. Try refining your search.")
     else:
         selected_player = None  # Ensure selected_player is None if no query entered
 
-# Standardize player details
-if selected_player:  # Only unpack if a valid match is found
-    selected_player_name, selected_player_team = selected_player
-else:
-    selected_player_name, selected_player_team = None, None  # Set defaults to avoid errors
-
-if selected_player_name and search_method in ["Team Roster","Player Name"]:
+if selected_player and search_method in ["Team Roster","Player Name"]:
     selected_date = st.date_input("Select a date for games:", date.today())
+    if selected_date.year != selected_player.year:
+        print("changing year in player class")
+        selected_player = Player(fuzzy_player.name, fuzzy_player.team_name, selected_date.year)
 
     # Fetch games for the selected date
     games = get_games_for_date(selected_date)
 
     # ✅ Only check for games if there's a valid player & date
-    if selected_player_team and games:
-        selected_game = next((game for game in games if selected_player_team in [game["home_team"], game["away_team"]]), None)
+    if selected_player and games:
+        selected_game = next((game for game in games if selected_player.team_name in [game.home_team.name, game.away_team.name]), None)
 
         if not selected_game:
-            st.warning(f"{selected_player_name} ({selected_player_team}) does not have a game on {selected_date}.")
+            st.warning(f"{selected_player.name} ({selected_player.team_name}) does not have a game on {selected_date}.")
 # 5️⃣ **Proceed to Stats Selection**
 if selected_player:
-    player = Player(selected_player_name, selected_player_team, selected_date.year)
+    selected_player.fetch_stats()
 
-    if not player.profile_url:
+    if not selected_player.profile_url:
         st.error("❌ Player not found.")
         st.stop()
 
-    if not player.fetch_stats():
+    if not selected_player.fetch_stats():
         st.error("❌ Failed to fetch player stats.")
         st.stop()
 
     # Check if we have stats data
-    if player.stats is None:
+    if selected_player.stats is None:
         st.error("❌ No stats found for this player.")
         st.stop()
 
-    st.write(f"Fetching stats for {selected_player_name} from {player.stats_url}")
+    st.write(f"Fetching stats for {selected_player.name} from {selected_player.stats_url}")
 
     #st.write(f"📊 Player stats: {stats}")  # Debugging
 
-    if player.stats:
+    if selected_player.stats:
         # 4️⃣ **Stat Selection**
         DEFAULT_COLUMNS = ["game_date", "opponent", "result"]
 
@@ -152,16 +148,16 @@ if selected_player:
 
         # 7️⃣ **Generate Stats Report**
         if st.button("Generate Report"):
-            st.subheader(f"📊 Stats Report for {selected_player_name}")
+            st.subheader(f"📊 Stats Report for {selected_player.name}")
 
-            if player.image_url:
-                st.image(player.image_url, caption=selected_player_name, width=150)
+            if selected_player.image_url:
+                st.image(selected_player.image_url, caption=selected_player.name, width=150)
             else:
                 st.write("No image available for this player.")
 
             # **Last 5 Games**
             if "Last n Games" in selected_stat_types:
-                last_n_games, avg_over_last_n_games = player.get_last_n_games(n, selected_date)
+                last_n_games, avg_over_last_n_games = selected_player.get_last_n_games(n, selected_date)
                 if last_n_games:
                     filtered_last_n_games = filter_stats(last_n_games, selected_stats)
 
@@ -222,7 +218,7 @@ if selected_player:
 
             # **Full Season Averages**
             if "Full Season Averages" in selected_stat_types:
-                season_avg_stats = player.get_season_averages()
+                season_avg_stats = selected_player.get_season_averages()
                 if season_avg_stats:
                     filtered_season_avg_stats = filter_stats(season_avg_stats, selected_stats, is_average=True)
 
@@ -244,15 +240,15 @@ if selected_player:
             # **Stats Against This Opponent**
             if "Stats Against This Opponent" in selected_stat_types:
                 if selected_game:
-                    if selected_player_team == selected_game['home_team']:
-                        opponent_team_name = selected_game['away_team']
-                    elif selected_player_team == selected_game['away_team']:
-                        opponent_team_name = selected_game['home_team']
+                    if selected_player.team_name == selected_game.home_team.name:
+                        opponent_team_name = selected_game.away_team.name
+                    elif selected_player.team_name == selected_game.away_team.name:
+                        opponent_team_name = selected_game.home_team.name
                     else:
-                        print(f"Player {player_name} not found in either team's roster.")
+                        print(f"{selected_player.name} not found in either team's roster.")
                     
                     opponent_team_code = TEAM_CODES[opponent_team_name]
-                    opponent_stats, avg_opponent_stats = player.get_stats_against_opponent(opponent_team_code)
+                    opponent_stats, avg_opponent_stats = selected_player.get_stats_against_opponent(opponent_team_code)
                     if opponent_stats:
                         filtered_opponent_stats = filter_stats(opponent_stats, selected_stats)
 
@@ -288,15 +284,15 @@ if selected_player:
                             st.write(f"#### 🔄 Averages Against {opponent_team_name}")
                             st.table(df_avg_opponent_stats)
                     else:
-                        st.warning(f"No matching stats found for {selected_player_name} against {opponent_team_name}.")
+                        st.warning(f"No matching stats found for {selected_player.name} against {opponent_team_name}.")
                 else:
-                    st.warning(f"{selected_player_name} ({selected_player_team}) does not have a game on {selected_date}.")
+                    st.warning(f"{selected_player.name} ({selected_player.team_name}) does not have a game on {selected_date}.")
 
             # **Threshold Stats**
             if "Threshold Stats" in selected_stat_types:
                 threshold_results = []
                 for stat, threshold in stat_thresholds.items():
-                    result = player.count_exceeding_threshold(stat, threshold)
+                    result = selected_player.count_exceeding_threshold(stat, threshold)
                     count_exceeded, count_not_exceeded, total_games, percentage_exceeded, percentage_not_exceeded = result
 
                     threshold_results.append([

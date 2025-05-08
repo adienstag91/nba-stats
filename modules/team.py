@@ -4,6 +4,7 @@ from bs4 import BeautifulSoup
 from modules.constants import TEAM_CODES
 from modules.cache import safe_request
 from modules.utils import format_display_name
+from modules.player import Player
 
 class Team:
     def __init__(self, name, year=2025):
@@ -37,7 +38,7 @@ class Team:
         roster_table = soup.find("table", {"class": "sortable stats_table"})
         if roster_table:
             self.roster = [
-                (format_display_name(row.find("td", {"data-stat": "player"}).get_text(strip=True)), self.name)
+                Player(format_display_name(row.find("td", {"data-stat": "player"}).get_text(strip=True)), self.name, self.year)
                 for row in roster_table.find_all("tr")[1:]
                 if row.find("td", {"data-stat": "player"})
             ]
@@ -45,7 +46,7 @@ class Team:
             print(f"⚠️ No roster found for {self.name}")
 
     def get_player_names(self):
-        return [p[0] for p in self.roster]
+        return self.roster
 
     def __repr__(self):
         return f"<Team: {self.name}, Players: {len(self.roster)}>"
