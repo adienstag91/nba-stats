@@ -53,8 +53,8 @@ def get_all_teams():
 
 def get_all_players_in_game(selected_game):
     """Fetch rosters for both teams in a selected game."""
-    home_team = Team(selected_game.home_team.name)
-    away_team = Team(selected_game.away_team.name)
+    home_team = Team(selected_game.home_team.name, selected_game.season)
+    away_team = Team(selected_game.away_team.name, selected_game.season)
 
     return home_team.roster + away_team.roster
 

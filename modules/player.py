@@ -5,11 +5,11 @@ from modules.utils import normalize_player_name, format_display_name
 from modules.constants import *
 
 class Player:
-    def __init__(self, name, team, year):
+    def __init__(self, name, team, season):
         self.name = name
         self.team_name = team
         self.team_code = TEAM_CODES.get(self.team_name)
-        self.year = year
+        self.season = season
         self.normalized_name = normalize_player_name(name)
         self.profile_url = None
         self.stats_url = None
@@ -32,7 +32,7 @@ class Player:
         for i in range(1, 9):  # Try 01 to 08
             player_id = f"{first_five_last}{first_two_first}{str(i).zfill(2)}"
             profile_url = BASE_URL.format(first_letter, f"{player_id}.html")
-            stats_url = BASE_URL.format(first_letter, f"{player_id}/gamelog/{self.year}")
+            stats_url = BASE_URL.format(first_letter, f"{player_id}/gamelog/{self.season}")
             response = safe_request(profile_url)
 
             if not response:

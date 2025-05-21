@@ -1,9 +1,19 @@
 import html
 import unidecode
 import re
+import streamlit as st
 import pandas as pd
+from datetime import datetime, date
 from fuzzywuzzy import process
+
 from modules.constants import *
+
+def get_season_year(dt):
+    """
+    Given a date, return the 'season year' used by Basketball Reference.
+    Example: March 2024 → 2024 season, October 2024 → 2025 season.
+    """
+    return dt.year + 1 if dt.month >= 10 else dt.year
 
 def format_display_name(player_name):
     """Format the player's name for display (human-readable with special characters)."""
@@ -68,30 +78,32 @@ def rename_columns(df):
     """
     return df.rename(columns=STAT_NAME_MAPPING)
     
-def filter_stats(stats_data, selected_stats, is_average=False):
+def filter_stats(stats_list, selected_stats, is_average=False):
     """
-    Filters the given stats dictionary/list based on selected stats.
-
-    - stats_data: Dictionary (season averages) or list of dictionaries (last 5 games).
-    - selected_stats: List of stat keys to keep.
-    - is_average: If True, modifies keys to match the "avg_" prefix.
-
-    Returns:
-      - Filtered list of dictionaries (if stats_data is a list)
-      - Filtered dictionary (if stats_data is a dictionary)
+    Filter a list of stat dictionaries to include only selected stats.
+    Always includes 'game_date', 'opponent', and 'result' for display/charting.
     """
-    if isinstance(stats_data, list):  # Handling list (e.g., Last 5 Games)
-        filtered_data = []
-        for game in stats_data:
-            filtered_game = {stat: game.get(stat, "N/A") for stat in selected_stats}
-            filtered_game["game_date"] = game["game_date"]  # Keep game date
-            filtered_data.append(filtered_game)
-        return filtered_data
+    always_include = ["game_date", "opponent", "result"]
+    if is_average:
+        # Prefix averages with "avg_" in case of average rows
+        return {
+            k: v for k, v in stats_list.items()
+            if k in [f"avg_{s}" for s in selected_stats]
+        }
 
-    elif isinstance(stats_data, dict):  # Handling dict (e.g., Season Averages, Last 5 Game Averages)
-        if is_average:
-            return {f"avg_{stat}": stats_data.get(f"avg_{stat}", "N/A") for stat in selected_stats}
-        return {stat: stats_data.get(stat, "N/A") for stat in selected_stats}
+    return [
+        {
+            **{k: game[k] for k in always_include if k in game},
+            **{k: game.get(k, 0) for k in selected_stats}
+        }
+        for game in stats_list
+    ]
 
-    return stats_data  # If unexpected type, return as is
-
+def render_table(df, title=None):
+    if title:
+        st.write(title)
+    df = rename_columns(df)
+    df = df[[col for col in ["Game Date", "Opponent", "Result"] if col in df.columns] +
+             [col for col in df.columns if col not in ["Game Date", "Opponent", "Result"]]]
+    df.index += 1
+    st.table(df)
