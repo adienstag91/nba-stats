@@ -6,3 +6,6 @@ altair
 lxml
 fuzzywuzzy
 unidecode
+Datetime
+Date
+Time
