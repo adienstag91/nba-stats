@@ -7,5 +7,4 @@ lxml
 fuzzywuzzy
 unidecode
 Datetime
-Date
 Time
