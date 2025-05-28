@@ -5,3 +5,4 @@ requests
 altair
 lxml
 fuzzywuzzy
+unidecode
