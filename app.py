@@ -82,11 +82,13 @@ if selected_player:
     st.write(f"Fetching stats for {selected_player.name} from {selected_player.stats_url}")
 
     DEFAULT_COLUMNS = ["game_date", "opponent", "result"]
-    selectable_stats = {k: v for k, v in STAT_NAME_MAPPING.items() if k not in DEFAULT_COLUMNS}
+    # Convert column names for stat selection
+    selectable_stats = {k:v for k, v in STAT_NAME_MAPPING.items() if k not in DEFAULT_COLUMNS}
     selected_stat_names = st.multiselect("Select Stats", list(selectable_stats.values()))
     # Convert selected names back to original column keys
-    inverse_mapping = {v: k for k, v in selectable_stats.items()}
+    inverse_mapping = {v:k for k, v in selectable_stats.items()}
     selected_stats = [inverse_mapping[name] for name in selected_stat_names]
+
 
     stat_type_options = [
         "Last n Games",
@@ -113,28 +115,50 @@ if selected_player:
 
         if "Last n Games" in selected_stat_types:
             last_n, avg_n = selected_player.get_last_n_games(n, selected_date)
-            if last_n:
-                render_table(pd.DataFrame(filter_stats(last_n, selected_stats)), f"### 📅 Last {n} Games")
-                avg_df = pd.DataFrame([filter_stats(avg_n, selected_stats, is_average=True)])
-                avg_df.columns = [col.replace("avg_", "") for col in avg_df.columns]
-                render_table(avg_df, f"#### 🔄 Averages over last {n} games")
+            if "Threshold Stats" in selected_stat_types and stat_thresholds:
+                translated_thresholds = {STAT_NAME_MAPPING[k]:v for k, v in stat_thresholds.items()}
+                render_table(pd.DataFrame(filter_stat_columns(last_n, selected_stats)), f"### 📅 Last {n} Games", thresholds=translated_thresholds)
+            else:
+                render_table(pd.DataFrame(filter_stat_columns(last_n, selected_stats)), f"### 📅 Last {n} Games")
 
-                df_chart = pd.DataFrame(filter_stats(last_n, selected_stats))
-                df_chart_long = df_chart.melt(id_vars=["game_date", "opponent"],
-                                              value_vars=selected_stats,
-                                              var_name="Stat", value_name="Value")
-                chart = alt.Chart(df_chart_long).mark_line(point=True).encode(
-                    x=alt.X("game_date:T", title="Game Date", sort="x"),
-                    y=alt.Y("Value:Q", title="Stat Value"),
-                    color=alt.Color("Stat:N", legend=alt.Legend(title="Stat Type")),
-                    tooltip=["game_date", "opponent", "Stat", "Value"]
-                ).properties(width=700, height=400)
-                st.altair_chart(chart, use_container_width=True)
+            # --- Averages ---
+            avg_df = pd.DataFrame([filter_stat_columns(avg_n, selected_stats, is_average=True)])
+            avg_df.columns = [col.replace("avg_", "") for col in avg_df.columns]
+            render_table(avg_df, f"### 🔄 Averages over last {n} games")
+
+            # --- Chart ---
+            df_chart = pd.DataFrame(last_n)
+            df_chart_long = df_chart.melt(id_vars=["game_date", "opponent"],
+                                          value_vars=selected_stats,
+                                          var_name="Stat", value_name="Value")
+
+            chart = alt.Chart(df_chart_long).mark_line(point=True).encode(
+                x=alt.X("game_date:T", title="Game Date", sort="x"),
+                y=alt.Y("Value:Q", title="Stat Value"),
+                color=alt.Color("Stat:N", legend=alt.Legend(title="Stat Type")),
+                tooltip=["game_date", "opponent", "Stat", "Value"]
+            ).properties(width=700, height=400)
+
+            # Add horizontal threshold lines
+            if "Threshold Stats" in selected_stat_types and stat_thresholds:
+                for stat, threshold in stat_thresholds.items():
+                    threshold_df = pd.DataFrame({"Value": [threshold], "Stat": [stat]})
+                    threshold_line = alt.Chart(threshold_df).mark_rule(
+                        strokeDash=[4, 4],
+                        color="red"
+                    ).encode(
+                        y="Value:Q",
+                        detail="Stat:N"
+                    )
+                    chart += threshold_line
+
+            st.altair_chart(chart, use_container_width=True)
+
 
         if "Full Season Averages" in selected_stat_types:
             avg_season = selected_player.get_season_averages()
             if avg_season:
-                avg_df = pd.DataFrame([filter_stats(avg_season, selected_stats, is_average=True)])
+                avg_df = pd.DataFrame([filter_stat_columns(avg_season, selected_stats, is_average=True)])
                 avg_df.columns = [col.replace("avg_", "") for col in avg_df.columns]
                 render_table(avg_df, "### 📊 Full Season Averages")
 
@@ -146,11 +170,15 @@ if selected_player:
             opponent_code = TEAM_CODES[opponent_team_name]
             stats, avg = selected_player.get_stats_against_opponent(opponent_code)
             if stats:
-                render_table(pd.DataFrame(filter_stats(stats, selected_stats)), f"### 🎯 Stats Against {opponent_team_name}")
+                if "Threshold Stats" in selected_stat_types and stat_thresholds:
+                    translated_thresholds = {STAT_NAME_MAPPING[k]:v for k, v in stat_thresholds.items()}
+                    render_table(pd.DataFrame(filter_stat_columns(stats, selected_stats)), f"### 🎯 Stats Against {opponent_team_name}",thresholds=translated_thresholds)
+                else:
+                    render_table(pd.DataFrame(filter_stat_columns(stats, selected_stats)), f"### 🎯 Stats Against {opponent_team_name}")
                 if len(stats) > 1:
-                    avg_df = pd.DataFrame([filter_stats(avg, selected_stats, is_average=True)])
+                    avg_df = pd.DataFrame([filter_stat_columns(avg, selected_stats, is_average=True)])
                     avg_df.columns = [col.replace("avg_", "") for col in avg_df.columns]
-                    render_table(avg_df, f"#### 🔄 Averages Against {opponent_team_name}")
+                    render_table(avg_df, f"### 🔄 Averages Against {opponent_team_name}")
             else:
                 st.warning(f"No matching stats found for {selected_player.name} vs {opponent_team_name}.")
 

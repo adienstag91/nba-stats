@@ -6,6 +6,7 @@ import pandas as pd
 from datetime import datetime, date
 from fuzzywuzzy import process
 
+
 from modules.constants import *
 
 def get_season_year(dt):
@@ -72,22 +73,22 @@ def fuzzy_match_player(player_name, all_players):
         return best_match[0]  # Correctly returns (player_name, team_name)
 
     return None, None
-def rename_columns(df):
+def rename_stats_for_display(df):
     """
     Renames the columns of the DataFrame using the STAT_NAME_MAPPING dictionary.
     """
     return df.rename(columns=STAT_NAME_MAPPING)
     
-def filter_stats(stats_list, selected_stats, is_average=False):
+def filter_stat_columns(stats_list, selected_stats, is_average=False):
     """
     Filter a list of stat dictionaries to include only selected stats.
-    Always includes 'game_date', 'opponent', and 'result' for display/charting.
+    Always includes 'game_date', 'opponent', and 'result' for display/charting. ** creates dynamic dictionary with always included fields plus selected stat fields
     """
     always_include = ["game_date", "opponent", "result"]
     if is_average:
         # Prefix averages with "avg_" in case of average rows
         return {
-            k: v for k, v in stats_list.items()
+            k:v for k, v in stats_list.items()
             if k in [f"avg_{s}" for s in selected_stats]
         }
 
@@ -99,11 +100,20 @@ def filter_stats(stats_list, selected_stats, is_average=False):
         for game in stats_list
     ]
 
-def render_table(df, title=None):
-    if title:
-        st.write(title)
-    df = rename_columns(df)
-    df = df[[col for col in ["Game Date", "Opponent", "Result"] if col in df.columns] +
-             [col for col in df.columns if col not in ["Game Date", "Opponent", "Result"]]]
+def highlight_thresholds(row, thresholds):
+    return [
+        'color: green; font-weight: bold' if stat in thresholds and row[stat] >= thresholds[stat]
+        else 'color: red' if stat in thresholds else ''
+        for stat in row.index
+    ]
+
+def render_table(df, title="", thresholds=None):
+    st.write(title)
+    df = rename_stats_for_display(df)
+    df = df[[col for col in ["Game Date", "Opponent", "Result"] if col in df.columns] + [col for col in df.columns if col not in ["Game Date", "Opponent", "Result"]]]
     df.index += 1
-    st.table(df)
+    if thresholds:
+        styled_df = df.style.apply(highlight_thresholds, thresholds=thresholds, axis=1)
+        st.dataframe(styled_df)
+    else:
+        st.dataframe(df)
