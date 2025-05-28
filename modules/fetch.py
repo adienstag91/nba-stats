@@ -58,17 +58,17 @@ def get_all_players_in_game(selected_game):
 
     return home_team.roster + away_team.roster
 
-def get_all_active_players(year):
+def get_all_active_players(season):
     """Fetch and cache all active NBA players."""
     cache = load_cache()
     if "all_players" in cache and (time.time() - cache["all_players"].get("timestamp", 0)) < CACHE_EXPIRY["all_players"]:
         print("✅ Using cached all_players list")
-        return [Player(name, team, year) for name, team in cache["all_players"]["data"]]
+        return [Player(name, team, season) for name, team in cache["all_players"]["data"]]
 
     print("🌍 Fetching all active players...")
     all_players = []
     for team_name in TEAM_CODES:
-        team = Team(team_name)
+        team = Team(team_name, season)
         all_players.extend(team.roster)
         time.sleep(7)
     
