@@ -24,7 +24,7 @@ class Team:
         response_text = safe_request(url, category="rosters")
 
         if not response_text:
-            print(f"❌ Failed to fetch page for {selfame}")
+            print(f"❌ Failed to fetch page for {self.name}")
             return
 
         soup = BeautifulSoup(response_text, "html.parser")
