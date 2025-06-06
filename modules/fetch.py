@@ -77,4 +77,4 @@ def get_all_active_players(season):
     "timestamp": time.time()
 }
     save_cache(cache)
-    return [Player(name, team, year) for name, team in cache["all_players"]["data"]]
+    return [Player(name, team, season) for name, team in cache["all_players"]["data"]]
