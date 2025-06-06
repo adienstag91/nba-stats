@@ -82,7 +82,7 @@ def rename_stats_for_display(df):
 def filter_stat_columns(stats_list, selected_stats, is_average=False):
     """
     Filter a list of stat dictionaries to include only selected stats.
-    Always includes 'game_date', 'opponent', and 'result' for display/charting. ** creates dynamic dictionary with always included fields plus selected stat fields
+    Always includes 'game_date', 'opponent', and 'result' for display/charting; returns dictionaries with those fields plus the selected stats.
     """
     always_include = ["game_date", "opponent", "result"]
     if is_average:
