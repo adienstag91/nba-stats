@@ -7,3 +7,4 @@ lxml
 fuzzywuzzy
 unidecode
 Datetime
+pytest
