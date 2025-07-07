@@ -9,6 +9,20 @@ from modules.constants import *
 from modules.utils import *
 from modules.fetch import *
 
+# --- App Instructions ---
+with st.expander("ℹ️ How to use this app"):
+    st.markdown(
+        """
+        **Search Modes**
+        - **Game Date**: pick a date to view that day's matchups and select a player from those teams. The 2024‑25 season has concluded; use **6/22** for the last playoff game or **4/13** for the final regular-season games.
+        - **Team Roster**: choose a team and then a player from its roster for the selected season.
+        - **Player Name**: type a player's name to fuzzy search across active players.
+
+        **Stats Options**
+        Compile player statistics using full-season averages, performance in the last *n* games, head-to-head numbers against the chosen opponent, and threshold analysis.
+        """
+    )
+
 # --- UI Step 1: Search Method Selection ---
 search_method = st.radio("Choose how you want to search:", ["Game Date", "Team Roster", "Player Name"])
 
