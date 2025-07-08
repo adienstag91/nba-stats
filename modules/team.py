@@ -35,7 +35,7 @@ class Team:
         self.logo_url = img_tag["src"] if img_tag else None
 
         # Extract roster
-        roster_table = soup.find("table", {"class": "sortable stats_table"})
+        roster_table = soup.find("table", {"class": "sortable stats_table now_sortable"})
         if roster_table:
             self.roster = [
                 Player(format_display_name(row.find("td", {"data-stat": "player"}).get_text(strip=True)), self.name, self.season)

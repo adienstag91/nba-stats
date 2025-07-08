@@ -18,9 +18,13 @@ def get_season_year(dt):
 
 def format_display_name(player_name):
     """Format the player's name for display (human-readable with special characters)."""
-    formatted_name = html.unescape(player_name)  # Decode HTML entities
-    formatted_name = formatted_name.encode('latin1').decode('utf-8', 'ignore')  # Fix encoding issues
-    return formatted_name
+    try:
+        decoded = html.unescape(player_name)
+        # Only attempt this if decoding succeeds
+        return decoded
+    except Exception:
+        # Fallback to safe ASCII approximation
+        return unidecode.unidecode(player_name)
 
 def normalize_player_name(formatted_name):
     """

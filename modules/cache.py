@@ -29,56 +29,47 @@ def save_cache(cache):
         json.dump(cache, f, indent=4)
 
 
-def safe_request(url, category="pages", max_retries=3):
+from playwright.sync_api import sync_playwright
+
+def safe_request(url, category="pages"):
     """
-    Fetches data from the given URL, caches the result, and handles errors.
-    Cached data expires based on the category's expiry time.
+    Always uses Playwright to fetch the page, with full caching and expiry support.
     """
     cache = load_cache()
     category_cache = cache.get(category, {})
 
-    # Ensure cache stores structured data (handle old raw string cache)
-    cached_entry = cache.get(url)
-    if isinstance(cached_entry, str):  
-        # Convert old cache format (raw HTML) to new format (dict with timestamp)
-        print(f"⚠️ Converting old cache format for {url}")
-        cache[url] = {"data": cached_entry, "timestamp": time.time()}
-        save_cache(cache)
-
-    # Check if cached response exists and is still valid
+    # Use cached version if valid
     if url in category_cache:
         timestamp = category_cache[url].get("timestamp", 0)
         age = time.time() - timestamp
-
         if age < CACHE_EXPIRY[category]:
             print(f"✅ Using cached {category} response for {url} (Age: {age / 3600:.2f} hours)")
             return category_cache[url]["data"]
+        else:
+            print(f"⏳ Cache expired for {category} {url}. Fetching fresh data.")
 
-        print(f"⏳ Cache expired for {category} {url}. Fetching fresh data.")
+    print(f"🌍 Fetching {url} using Playwright...")
 
-    print(f"🌍 Fetching {url} from the internet...")
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(url, timeout=20000, wait_until="domcontentloaded")
+            html = page.content()
+            browser.close()
 
-    # Retry mechanism
-    for attempt in range(max_retries):
-        try:
-            response = requests.get(url, timeout=5)
-            response.raise_for_status()
-
-            if response.text.strip():  # Ensure response isn't empty
-                category_cache[url] = {
-                    "data": response.text,
-                    "timestamp": time.time()
-                }
+            if html.strip():
+                category_cache[url] = {"data": html, "timestamp": time.time()}
                 cache[category] = category_cache
                 save_cache(cache)
-                print(f"✅ Cached response for {category} {url}")
-                return response.text
+                print(f"✅ Playwright fetch + cache successful for {url}")
+                return html
+            else:
+                print(f"⚠️ Empty content received from Playwright for {url}")
 
-        except requests.exceptions.RequestException as e:
-            print(f"❌ Attempt {attempt + 1} failed: {e}")
-            time.sleep(2)
+    except Exception as e:
+        print(f"❌ Playwright failed for {url}: {e}")
 
-    print(f"❌ Failed to fetch {url} after {max_retries} attempts.")
     return None
 
 def clear_cache(category=None):
