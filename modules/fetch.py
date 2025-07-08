@@ -13,7 +13,8 @@ def get_games_for_date(selected_date):
     """Fetch all games for a given date from Basketball Reference."""
     month = selected_date.strftime('%B').lower()
     year = selected_date.year
-    url = f"https://www.basketball-reference.com/leagues/NBA_{year}_games-{month}.html"
+    selected_season = get_season_year(selected_date)
+    url = f"https://www.basketball-reference.com/leagues/NBA_{selected_season}_games-{month}.html"
     response_text = safe_request(url)
 
     if not response_text:

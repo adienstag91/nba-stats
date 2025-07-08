@@ -10,11 +10,11 @@ from modules.utils import *
 from modules.fetch import *
 
 # --- App Instructions ---
-with st.expander("ℹ️ How to use this app"):
+with st.expander("ℹ️ Instructions"):
     st.markdown(
         """
-        **Search Modes**
-        - **Game Date**: pick a date to view that day's matchups and select a player from those teams. The 2024‑25 season has concluded; use **6/22** for the last playoff game or **4/13** for the final regular-season games.
+        **Search Modes:**
+        - **Game Date**: pick a date to view that day's matchups and select a player from those teams. Note: The 2024‑25 season has concluded; use **4/19/24 - 6/22/25** for playoff matchups or **4/13/25** for the final regular-season games.
         - **Team Roster**: choose a team and then a player from its roster for the selected season.
         - **Player Name**: type a player's name to fuzzy search across active players.
 
@@ -34,8 +34,11 @@ selected_game = None
 # --- Search Mode: Game Date ---
 if search_method == "Game Date":
     selected_date = st.date_input("Select a date for games:", date.today())
+    print(f"date - {selected_date}")
     selected_season = get_season_year(selected_date)
+    print(f"season {selected_season}")
     games = get_games_for_date(selected_date)
+    print(f"games {games}")
 
     if games:
         selected_game = st.selectbox("Select a game:", games, format_func=str)
