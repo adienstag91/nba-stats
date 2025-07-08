@@ -2,7 +2,6 @@ import json
 import time
 import os
 import requests
-from playwright.sync_api import sync_playwright
 
 CACHE_FILE = "nba_cache.json"
 CACHE_EXPIRY = {
