@@ -3,6 +3,7 @@ from datetime import datetime, date
 from modules.cache import safe_request
 from modules.utils import normalize_player_name, format_display_name
 from modules.constants import *
+import time
 
 class Player:
     def __init__(self, name, team, season):
@@ -46,6 +47,7 @@ class Player:
 
             fetched_name = h1_tag.find("span").text.strip()
             if normalize_player_name(format_display_name(fetched_name)) != self.normalized_name:
+                time(7)
                 continue
 
             team_element = None
