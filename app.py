@@ -58,16 +58,19 @@ if search_method == "Game Date":
     if games:
         selected_game = st.selectbox("Select a game:", games, format_func=str)
 
-        # Reset player selection if game changed - use a counter for unique keys
+        # Check if game changed and trigger rerun to clear player selection
         if 'last_selected_game' not in st.session_state:
-            st.session_state.last_selected_game = None
-            st.session_state.game_change_counter = 0
+            st.session_state.last_selected_game = str(selected_game)
 
         if st.session_state.last_selected_game != str(selected_game):
+            # Game changed - clear player selection and rerun
+            st.session_state.last_selected_game = str(selected_game)
             st.session_state.selected_player = None
             st.session_state.stats_fetched = False
-            st.session_state.last_selected_game = str(selected_game)
-            st.session_state.game_change_counter += 1  # Increment to force new widget
+            # Clear the player selectbox widget state
+            if 'game_date_player_select' in st.session_state:
+                del st.session_state['game_date_player_select']
+            st.rerun()
 
         st.session_state.selected_game = selected_game
 
@@ -81,12 +84,12 @@ if search_method == "Game Date":
 
         with st.spinner("Loading players..."):
             all_players = get_all_players_in_game(selected_game)
-        # Use counter-based key to force selectbox reset when game changes
+
         selected_player = st.selectbox(
             "Select a player:",
             all_players,
             format_func=lambda x: f"{x.name} ({x.team_name})",
-            key=f"player_select_{st.session_state.game_change_counter}"
+            key="game_date_player_select"
         )
         if selected_player:
             st.session_state.selected_player = selected_player
