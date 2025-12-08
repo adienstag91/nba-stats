@@ -57,6 +57,15 @@ if search_method == "Game Date":
 
     if games:
         selected_game = st.selectbox("Select a game:", games, format_func=str)
+
+        # Reset player selection if game changed
+        if 'last_selected_game' not in st.session_state:
+            st.session_state.last_selected_game = None
+        if st.session_state.last_selected_game != str(selected_game):
+            st.session_state.selected_player = None
+            st.session_state.stats_fetched = False
+            st.session_state.last_selected_game = str(selected_game)
+
         st.session_state.selected_game = selected_game
 
         col1, col2 = st.columns([1, 1])
