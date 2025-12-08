@@ -4,6 +4,72 @@ from modules.cache import safe_request
 from modules.utils import normalize_player_name, format_display_name
 from modules.constants import *
 import time
+import streamlit as st
+
+@st.cache_data(ttl=86400)  # Cache player stats for 24 hours
+def _fetch_and_parse_player_stats(stats_url):
+    """Cached function to fetch and parse player stats from a URL."""
+    from bs4 import BeautifulSoup
+
+    response = safe_request(stats_url)
+    if not response:
+        print(f"❌ Failed to fetch stats page: {stats_url}")
+        return None
+
+    soup = BeautifulSoup(response, "html.parser")
+    stats = []
+
+    # Import here to avoid circular imports
+    from modules.player import Player
+    player_instance = Player.__new__(Player)
+
+    for table_id, game_type in [("player_game_log_reg", "regular"), ("player_game_log_post", "playoff")]:
+        table = soup.find("table", {"id": table_id})
+        if table:
+            stats.extend(_parse_stats_table_helper(table, game_type))
+
+    stats.sort(key=lambda x: x["game_date"])
+    return stats
+
+def _parse_stats_table_helper(table, game_type):
+    """Helper function to parse stats table."""
+    rows = table.find_all("tr")[1:]
+    stats_list = []
+
+    for row in rows:
+        cols = row.find_all("td")
+        if len(cols) < 27:
+            continue
+
+        game_date = cols[2].get_text().strip()
+        if not game_date or game_date.lower() in ["totals", ""]:
+            continue
+
+        stat_row = {
+            "game_date": game_date,
+            "opponent": cols[5].get_text(),
+            "result": cols[6].get_text(),
+            "game_type": game_type
+        }
+
+        for stat, idx in AVAILABLE_STATS.items():
+            if idx is None:
+                continue
+            try:
+                value = cols[idx].get_text()
+                stat_row[stat] = int(value) if value.isdigit() else float(value or 0)
+            except (ValueError, IndexError):
+                stat_row[stat] = 0
+
+        # Combo stats
+        stat_row["points_rebounds"] = stat_row["points"] + stat_row["rebounds"]
+        stat_row["points_assists"] = stat_row["points"] + stat_row["assists"]
+        stat_row["rebounds_assists"] = stat_row["rebounds"] + stat_row["assists"]
+        stat_row["points_rebounds_assists"] = stat_row["points"] + stat_row["rebounds"] + stat_row["assists"]
+
+        stats_list.append(stat_row)
+
+    return stats_list
 
 class Player:
     def __init__(self, name, team, season):
@@ -47,7 +113,7 @@ class Player:
 
             fetched_name = h1_tag.find("span").text.strip()
             if normalize_player_name(format_display_name(fetched_name)) != self.normalized_name:
-                time(7)
+                time.sleep(7)
                 continue
 
             team_element = None
@@ -89,19 +155,12 @@ class Player:
             print(f"⚠️ No stats URL found for {self.name}")
             return None
 
-        response = safe_request(self.stats_url)
-        if not response:
-            print(f"❌ Failed to fetch stats page: {self.stats_url}")
+        # Use cached function to fetch and parse stats
+        stats = _fetch_and_parse_player_stats(self.stats_url)
+        if not stats:
+            print(f"❌ Failed to fetch stats for {self.name}")
             return None
 
-        soup = BeautifulSoup(response, "html.parser")
-        stats = []
-        for table_id, game_type in [("player_game_log_reg", "regular"), ("player_game_log_post", "playoff")]:
-            table = soup.find("table", {"id": table_id})
-            if table:
-                stats.extend(self._parse_stats_table(table, game_type))
-
-        stats.sort(key=lambda x: x["game_date"])
         self.stats = stats
         return stats
 

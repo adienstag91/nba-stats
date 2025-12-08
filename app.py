@@ -9,6 +9,14 @@ from modules.constants import *
 from modules.utils import *
 from modules.fetch import *
 
+# --- Initialize Session State ---
+if 'selected_player' not in st.session_state:
+    st.session_state.selected_player = None
+if 'selected_game' not in st.session_state:
+    st.session_state.selected_game = None
+if 'stats_fetched' not in st.session_state:
+    st.session_state.stats_fetched = False
+
 # --- App Instructions ---
 with st.expander("ℹ️ Instructions"):
     st.markdown(
@@ -31,17 +39,54 @@ selected_date = date.today()
 selected_season = get_season_year(selected_date)
 selected_game = None
 
+# Reset stats_fetched when search method changes
+if 'last_search_method' not in st.session_state:
+    st.session_state.last_search_method = search_method
+if st.session_state.last_search_method != search_method:
+    st.session_state.stats_fetched = False
+    st.session_state.selected_player = None
+    st.session_state.last_search_method = search_method
+
 # --- Search Mode: Game Date ---
 if search_method == "Game Date":
     selected_date = st.date_input("Select a date for games:", date.today())
-    print(f"date - {selected_date}")
     selected_season = get_season_year(selected_date)
-    print(f"season {selected_season}")
-    games = get_games_for_date(selected_date)
-    print(f"games {games}")
+
+    # Track date changes to reset game/player selection
+    if 'last_selected_date' not in st.session_state:
+        st.session_state.last_selected_date = str(selected_date)
+
+    if str(selected_date) != st.session_state.last_selected_date:
+        # Date changed - reset everything
+        st.session_state.last_selected_date = str(selected_date)
+        st.session_state.last_selected_game = None
+        st.session_state.selected_player = None
+        st.session_state.stats_fetched = False
+        if 'game_date_player_select' in st.session_state:
+            del st.session_state['game_date_player_select']
+
+    with st.spinner("Loading games..."):
+        games = get_games_for_date(selected_date)
 
     if games:
         selected_game = st.selectbox("Select a game:", games, format_func=str)
+
+        # Check if game changed and trigger rerun to clear player selection
+        if 'last_selected_game' not in st.session_state:
+            st.session_state.last_selected_game = str(selected_game)
+
+        if st.session_state.last_selected_game != str(selected_game):
+            # Game changed - clear player selection and rerun
+            st.session_state.last_selected_game = str(selected_game)
+            st.session_state.selected_player = None
+            st.session_state.stats_fetched = False
+            # Clear the player selectbox widget state
+            if 'game_date_player_select' in st.session_state:
+                del st.session_state['game_date_player_select']
+            st.rerun()
+
+        st.session_state.selected_game = selected_game
+
         col1, col2 = st.columns([1, 1])
         with col1:
             if selected_game.away_team.logo_url:
@@ -50,26 +95,50 @@ if search_method == "Game Date":
             if selected_game.home_team.logo_url:
                 st.image(selected_game.home_team.logo_url, width=150, caption=selected_game.home_team.name)
 
-        all_players = get_all_players_in_game(selected_game)
-        selected_player = st.selectbox("Select a player:", all_players, format_func=lambda x: f"{x.name} ({x.team_name})")
+        with st.spinner("Loading players..."):
+            all_players = get_all_players_in_game(
+                selected_game.home_team.name,
+                selected_game.away_team.name,
+                selected_game.season
+            )
+
+        selected_player = st.selectbox(
+            "Select a player:",
+            all_players,
+            format_func=lambda x: f"{x.name} ({x.team_name})",
+            key="game_date_player_select"
+        )
+        if selected_player:
+            st.session_state.selected_player = selected_player
+            st.session_state.stats_fetched = False  # Reset when new player selected
     else:
         st.warning(f"No games found on {selected_date}.")
 
 # --- Search Mode: Team Roster ---
 elif search_method == "Team Roster":
-    selected_team = Team(st.selectbox("Select a team:", get_all_teams()), selected_season)
+    team_name = st.selectbox("Select a team:", get_all_teams())
+    with st.spinner("Loading team roster..."):
+        selected_team = get_team_cached(team_name, selected_season)
+
     if selected_team.logo_url:
         st.image(selected_team.logo_url, caption=selected_team.name, width=150)
     selected_player = st.selectbox("Select a Player", selected_team.roster, format_func=lambda x: f"{x.name}")
+    if selected_player:
+        st.session_state.selected_player = selected_player
+        st.session_state.stats_fetched = False  # Reset when new player selected
 
 # --- Search Mode: Player Name ---
 elif search_method == "Player Name":
-    all_players = get_all_active_players(selected_season)
+    with st.spinner("Loading all players..."):
+        all_players = get_all_active_players(selected_season)
+
     search_query = st.text_input("Enter player name:")
     if search_query:
         fuzzy_player = fuzzy_match_player(search_query, all_players)
         if fuzzy_player:
             selected_player = Player(fuzzy_player.name, fuzzy_player.team_name, selected_season)
+            st.session_state.selected_player = selected_player
+            st.session_state.stats_fetched = False  # Reset when new player selected
             st.write(f"### Selected Player: {selected_player.name} ({selected_player.team_name})")
         else:
             st.warning("No matching player found. Try refining your search.")
@@ -81,22 +150,25 @@ if selected_player and search_method in ["Team Roster", "Player Name"]:
     if selected_season != selected_player.season:
         st.info("↩️ Resetting player to correct season context.")
         selected_player = Player(selected_player.name, selected_player.team_name, selected_season)
+        st.session_state.selected_player = selected_player
+        st.session_state.stats_fetched = False
 
-    games = get_games_for_date(selected_date)
+    with st.spinner("Loading games..."):
+        games = get_games_for_date(selected_date)
     if games:
         selected_game = next((g for g in games if selected_player.team_name in [g.home_team.name, g.away_team.name]), None)
+        st.session_state.selected_game = selected_game
         if not selected_game:
             st.warning(f"{selected_player.name} ({selected_player.team_name}) does not have a game on {selected_date}.")
 
 # --- Stats Panel ---
-if selected_player:
-    stats_fetched = selected_player.fetch_stats()
+# Use session state player if available, otherwise use local selected_player
+if selected_player or st.session_state.selected_player:
+    if selected_player:
+        st.session_state.selected_player = selected_player
 
-    if not stats_fetched or not selected_player.stats:
-        st.error("No stats found.")
-        st.stop()
-
-    st.write(f"Fetching stats for {selected_player.name} from {selected_player.stats_url}")
+    current_player = st.session_state.selected_player
+    selected_game = st.session_state.selected_game
 
     DEFAULT_COLUMNS = ["game_date", "opponent", "result"]
     # Convert column names for stat selection
@@ -105,7 +177,6 @@ if selected_player:
     # Convert selected names back to original column keys
     inverse_mapping = {v:k for k, v in selectable_stats.items()}
     selected_stats = [inverse_mapping[name] for name in selected_stat_names]
-
 
     stat_type_options = [
         "Last n Games",
@@ -126,12 +197,22 @@ if selected_player:
         n = st.slider("n Games", min_value=1, max_value=82, value=5)
 
     if st.button("Generate Report"):
-        st.subheader(f"📊 Stats Report for {selected_player.name}")
-        if selected_player.image_url:
-            st.image(selected_player.image_url, caption=selected_player.name, width=150)
+        # Lazy load stats only when button is clicked
+        with st.spinner(f"Fetching stats for {current_player.name}..."):
+            stats_fetched = current_player.fetch_stats()
+
+        if not stats_fetched or not current_player.stats:
+            st.error("No stats found.")
+            st.stop()
+
+        st.session_state.stats_fetched = True
+        st.write(f"Stats loaded for {current_player.name} from {current_player.stats_url}")
+        st.subheader(f"📊 Stats Report for {current_player.name}")
+        if current_player.image_url:
+            st.image(current_player.image_url, caption=current_player.name, width=150)
 
         if "Last n Games" in selected_stat_types:
-            last_n, avg_n = selected_player.get_last_n_games(n, selected_date)
+            last_n, avg_n = current_player.get_last_n_games(n, selected_date)
             if "Threshold Stats" in selected_stat_types and stat_thresholds:
                 translated_thresholds = {STAT_NAME_MAPPING[k]:v for k, v in stat_thresholds.items()}
                 render_table(pd.DataFrame(filter_stat_columns(last_n, selected_stats)), f"### 📅 Last {n} Games", thresholds=translated_thresholds)
@@ -173,7 +254,7 @@ if selected_player:
 
 
         if "Full Season Averages" in selected_stat_types:
-            avg_season = selected_player.get_season_averages()
+            avg_season = current_player.get_season_averages()
             if avg_season:
                 avg_df = pd.DataFrame([filter_stat_columns(avg_season, selected_stats, is_average=True)])
                 avg_df.columns = [col.replace("avg_", "") for col in avg_df.columns]
@@ -181,11 +262,11 @@ if selected_player:
 
         if "Stats Against This Opponent" in selected_stat_types and selected_game:
             opponent_team_name = (
-                selected_game.away_team.name if selected_player.team_name == selected_game.home_team.name
+                selected_game.away_team.name if current_player.team_name == selected_game.home_team.name
                 else selected_game.home_team.name
             )
             opponent_code = TEAM_CODES[opponent_team_name]
-            stats, avg = selected_player.get_stats_against_opponent(opponent_code)
+            stats, avg = current_player.get_stats_against_opponent(opponent_code)
             if stats:
                 if "Threshold Stats" in selected_stat_types and stat_thresholds:
                     translated_thresholds = {STAT_NAME_MAPPING[k]:v for k, v in stat_thresholds.items()}
@@ -197,12 +278,12 @@ if selected_player:
                     avg_df.columns = [col.replace("avg_", "") for col in avg_df.columns]
                     render_table(avg_df, f"### 🔄 Averages Against {opponent_team_name}")
             else:
-                st.warning(f"No matching stats found for {selected_player.name} vs {opponent_team_name}.")
+                st.warning(f"No matching stats found for {current_player.name} vs {opponent_team_name}.")
 
         if "Threshold Stats" in selected_stat_types:
             rows = []
             for stat, threshold in stat_thresholds.items():
-                result = selected_player.count_exceeding_threshold(stat, threshold)
+                result = current_player.count_exceeding_threshold(stat, threshold)
                 rows.append([
                     STAT_NAME_MAPPING[stat], result[2], result[0], f"{result[3]:.2f}%",
                     result[1], f"{result[4]:.2f}%"

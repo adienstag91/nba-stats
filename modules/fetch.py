@@ -8,7 +8,9 @@ from modules.cache import *
 from modules.player import *
 from modules.team import Team
 from modules.game import Game
+import streamlit as st
 
+@st.cache_data(ttl=3600)  # Cache for 1 hour
 def get_games_for_date(selected_date):
     """Fetch all games for a given date from Basketball Reference."""
     month = selected_date.strftime('%B').lower()
@@ -48,17 +50,25 @@ def get_games_for_date(selected_date):
 
     return game_list
 
+@st.cache_data
 def get_all_teams():
     """Return all team names."""
     return list(TEAM_CODES.keys())
 
-def get_all_players_in_game(selected_game):
+@st.cache_data(ttl=86400)  # Cache team rosters for 24 hours
+def get_team_cached(team_name, season):
+    """Cache Team objects to avoid repeated roster fetches."""
+    return Team(team_name, season)
+
+@st.cache_data(ttl=3600)  # Cache for 1 hour
+def get_all_players_in_game(home_team_name, away_team_name, season):
     """Fetch rosters for both teams in a selected game."""
-    home_team = Team(selected_game.home_team.name, selected_game.season)
-    away_team = Team(selected_game.away_team.name, selected_game.season)
+    home_team = get_team_cached(home_team_name, season)
+    away_team = get_team_cached(away_team_name, season)
 
     return home_team.roster + away_team.roster
 
+@st.cache_data(ttl=86400)  # Cache for 24 hours
 def get_all_active_players(season):
     """Fetch and cache all active NBA players."""
     cache = load_cache()
@@ -69,10 +79,10 @@ def get_all_active_players(season):
     print("🌍 Fetching all active players...")
     all_players = []
     for team_name in TEAM_CODES:
-        team = Team(team_name, season)
+        team = get_team_cached(team_name, season)
         all_players.extend(team.roster)
         time.sleep(7)
-    
+
     cache["all_players"] = {
     "data": [(p.name, p.team_name) for p in all_players],  # ✅ Simple & safe
     "timestamp": time.time()
