@@ -52,6 +52,19 @@ if search_method == "Game Date":
     selected_date = st.date_input("Select a date for games:", date.today())
     selected_season = get_season_year(selected_date)
 
+    # Track date changes to reset game/player selection
+    if 'last_selected_date' not in st.session_state:
+        st.session_state.last_selected_date = str(selected_date)
+
+    if str(selected_date) != st.session_state.last_selected_date:
+        # Date changed - reset everything
+        st.session_state.last_selected_date = str(selected_date)
+        st.session_state.last_selected_game = None
+        st.session_state.selected_player = None
+        st.session_state.stats_fetched = False
+        if 'game_date_player_select' in st.session_state:
+            del st.session_state['game_date_player_select']
+
     with st.spinner("Loading games..."):
         games = get_games_for_date(selected_date)
 
@@ -83,7 +96,11 @@ if search_method == "Game Date":
                 st.image(selected_game.home_team.logo_url, width=150, caption=selected_game.home_team.name)
 
         with st.spinner("Loading players..."):
-            all_players = get_all_players_in_game(selected_game)
+            all_players = get_all_players_in_game(
+                selected_game.home_team.name,
+                selected_game.away_team.name,
+                selected_game.season
+            )
 
         selected_player = st.selectbox(
             "Select a player:",

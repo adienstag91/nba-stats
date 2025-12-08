@@ -61,10 +61,10 @@ def get_team_cached(team_name, season):
     return Team(team_name, season)
 
 @st.cache_data(ttl=3600)  # Cache for 1 hour
-def get_all_players_in_game(_selected_game):
+def get_all_players_in_game(home_team_name, away_team_name, season):
     """Fetch rosters for both teams in a selected game."""
-    home_team = get_team_cached(_selected_game.home_team.name, _selected_game.season)
-    away_team = get_team_cached(_selected_game.away_team.name, _selected_game.season)
+    home_team = get_team_cached(home_team_name, season)
+    away_team = get_team_cached(away_team_name, season)
 
     return home_team.roster + away_team.roster
 
