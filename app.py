@@ -78,7 +78,13 @@ if search_method == "Game Date":
 
         with st.spinner("Loading players..."):
             all_players = get_all_players_in_game(selected_game)
-        selected_player = st.selectbox("Select a player:", all_players, format_func=lambda x: f"{x.name} ({x.team_name})")
+        # Use game as key to force selectbox reset when game changes
+        selected_player = st.selectbox(
+            "Select a player:",
+            all_players,
+            format_func=lambda x: f"{x.name} ({x.team_name})",
+            key=f"player_select_{str(selected_game)}"
+        )
         if selected_player:
             st.session_state.selected_player = selected_player
             st.session_state.stats_fetched = False  # Reset when new player selected
